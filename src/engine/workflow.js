@@ -1,7 +1,7 @@
 const path = require('path');
 const { walkRepository } = require('./scanner');
 const { extractMetadata } = require('./metadataExtractor');
-const { summarizeApi } = require('./aiClient');
+const { summarizeApi, resolveAiConfig } = require('./aiClient');
 const { validateApiSummary } = require('./aiValidator');
 const { buildGraph } = require('./graphBuilder');
 const { writeCache } = require('./cache');
@@ -26,7 +26,7 @@ async function scanRepository(repoPath, options = {}) {
     routeCount: metadata.length,
     nodeCount: graph.nodes.length,
     edgeCount: graph.edges.length,
-    aiProvider: (options.aiProvider || process.env.APIMAP_AI_PROVIDER || 'mock').toLowerCase(),
+    aiProvider: resolveAiConfig(options).provider,
   };
 }
 

@@ -1,5 +1,43 @@
 const { buildPrompt } = require('./promptBuilder');
 
+function firstDefined(values) {
+  return values.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
+}
+
+function resolveAiConfig(options = {}) {
+  const provider = firstDefined([
+    options.aiProvider,
+    process.env.APIMAP_AI_PROVIDER,
+    process.env.AI_PROVIDER,
+    process.env.OPENAI_API_PROVIDER,
+    'mock',
+  ]).toLowerCase();
+
+  const token = firstDefined([
+    options.aiToken,
+    process.env.APIMAP_AI_TOKEN,
+    process.env.OPENAI_API_KEY,
+    process.env.AI_TOKEN,
+    process.env.AI_API_KEY,
+  ]);
+
+  const model = firstDefined([
+    options.aiModel,
+    process.env.APIMAP_AI_MODEL,
+    process.env.AI_MODEL,
+    'gpt-4o-mini',
+  ]);
+
+  const baseUrl = firstDefined([
+    options.aiBaseUrl,
+    process.env.OPENAI_BASE_URL,
+    process.env.AI_BASE_URL,
+    'https://api.openai.com/v1/chat/completions',
+  ]);
+
+  return { provider, token, model, baseUrl };
+}
+
 function buildFallbackSummary(routeData) {
   const flow = [];
   for (const table of routeData.tables) {
@@ -35,16 +73,14 @@ function buildFallbackSummary(routeData) {
 }
 
 async function callOpenAIChat(routeData, options) {
-  const token = options.aiToken || process.env.OPENAI_API_KEY;
+  const { token, model, baseUrl } = resolveAiConfig(options);
   if (!token) {
-    throw new Error('Missing OPENAI_API_KEY (or --ai-token) for ai-provider=openai');
+    throw new Error('Missing API key. Provide --ai-token or set APIMAP_AI_TOKEN / OPENAI_API_KEY');
   }
 
-  const model = options.aiModel || process.env.APIMAP_AI_MODEL || 'gpt-4o-mini';
-  const endpoint = options.aiBaseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1/chat/completions';
   const prompt = buildPrompt(routeData);
 
-  const response = await fetch(endpoint, {
+  const response = await fetch(baseUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -76,7 +112,7 @@ async function callOpenAIChat(routeData, options) {
 }
 
 async function summarizeApi(routeData, options = {}) {
-  const provider = (options.aiProvider || process.env.APIMAP_AI_PROVIDER || 'mock').toLowerCase();
+  const { provider } = resolveAiConfig(options);
 
   if (provider === 'mock') {
     return buildFallbackSummary(routeData);
@@ -89,4 +125,4 @@ async function summarizeApi(routeData, options = {}) {
   throw new Error(`Unsupported ai provider: ${provider}. Supported providers: mock, openai`);
 }
 
-module.exports = { summarizeApi, buildFallbackSummary };
+module.exports = { summarizeApi, buildFallbackSummary, resolveAiConfig };

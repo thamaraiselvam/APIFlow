@@ -14,7 +14,7 @@ Options (scan):
   --ai-base-url <url>           Override chat completions endpoint
 
 Environment fallbacks:
-  APIMAP_AI_PROVIDER, APIMAP_AI_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL
+  APIMAP_AI_PROVIDER, APIMAP_AI_TOKEN, APIMAP_AI_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL, AI_PROVIDER, AI_API_KEY, AI_MODEL, AI_BASE_URL
 `);
 }
 

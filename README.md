@@ -33,10 +33,14 @@ npx apimap scan . --ai-provider openai --ai-token "$OPENAI_API_KEY" --ai-model g
 
 ```bash
 export APIMAP_AI_PROVIDER=openai
-export OPENAI_API_KEY=your_token
+export APIMAP_AI_TOKEN=your_token
+# or OPENAI_API_KEY / AI_API_KEY
 export APIMAP_AI_MODEL=gpt-4o-mini
 npx apimap scan .
 ```
+
+
+Additional compatibility environment variables are also supported: `AI_PROVIDER`, `AI_API_KEY`/`AI_TOKEN`, `AI_MODEL`, and `AI_BASE_URL`.
 
 Optional endpoint override (OpenAI-compatible gateways):
 
