@@ -5,13 +5,20 @@ function firstDefined(values) {
 }
 
 function resolveAiConfig(options = {}) {
-  const provider = firstDefined([
+  const rawProvider = firstDefined([
     options.aiProvider,
     process.env.APIMAP_AI_PROVIDER,
     process.env.AI_PROVIDER,
     process.env.OPENAI_API_PROVIDER,
     'mock',
   ]).toLowerCase();
+
+  const providerAliases = {
+    open: 'openai',
+    'open-ai': 'openai',
+    oai: 'openai',
+  };
+  const provider = providerAliases[rawProvider] || rawProvider;
 
   const token = firstDefined([
     options.aiToken,
@@ -99,13 +106,13 @@ async function callOpenAIChat(routeData, options) {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`OpenAI call failed (${response.status}): ${text.slice(0, 200)}`);
+    throw new Error(`OpenAI call failed (${response.status}) for model ${model}: ${text.slice(0, 200)}`);
   }
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
   if (!content) {
-    throw new Error('OpenAI call returned empty response content');
+    throw new Error(`OpenAI call returned empty response content for model ${model}`);
   }
 
   return JSON.parse(content);

@@ -110,3 +110,9 @@ test('resolveAiConfig favors APIMAP variables over compatibility aliases', () =>
     else process.env[key] = value;
   });
 });
+
+
+test('resolveAiConfig normalizes open provider aliases to openai', () => {
+  const config = resolveAiConfig({ aiProvider: 'open' });
+  assert.equal(config.provider, 'openai');
+});

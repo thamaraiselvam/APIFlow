@@ -4,6 +4,19 @@ const { ensureCacheDir } = require('./engine/cache');
 const { scanRepository } = require('./engine/workflow');
 const { createServer } = require('./server');
 
+const OPTION_ALIASES = {
+  'ai-provider': 'aiProvider',
+  provider: 'aiProvider',
+  'api-provider': 'aiProvider',
+  'ai-token': 'aiToken',
+  token: 'aiToken',
+  'api-key': 'aiToken',
+  'ai-model': 'aiModel',
+  model: 'aiModel',
+  'ai-base-url': 'aiBaseUrl',
+  'base-url': 'aiBaseUrl',
+};
+
 function printUsage() {
   console.log(`Usage: apimap <init|scan|serve> [path] [options]
 
@@ -12,6 +25,8 @@ Options (scan):
   --ai-token <token>            API token (for openai)
   --ai-model <model>            Model name (default: gpt-4o-mini)
   --ai-base-url <url>           Override chat completions endpoint
+
+Also accepts aliases: --provider, --api-provider, --token, --api-key, --model, --base-url.
 
 Environment fallbacks:
   APIMAP_AI_PROVIDER, APIMAP_AI_TOKEN, APIMAP_AI_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL, AI_PROVIDER, AI_API_KEY, AI_MODEL, AI_BASE_URL
@@ -29,17 +44,23 @@ function parseArgs(argv) {
       continue;
     }
 
-    const key = arg.slice(2);
-    const next = argv[i + 1];
-    if (!next || next.startsWith('--')) {
-      throw new Error(`Missing value for --${key}`);
+    const [rawKey, inlineValue] = arg.slice(2).split(/=(.*)/s, 2);
+    const optionKey = OPTION_ALIASES[rawKey];
+    if (!optionKey) {
+      throw new Error(`Unknown option: --${rawKey}`);
     }
 
-    if (key === 'ai-provider') options.aiProvider = next;
-    if (key === 'ai-token') options.aiToken = next;
-    if (key === 'ai-model') options.aiModel = next;
-    if (key === 'ai-base-url') options.aiBaseUrl = next;
-    i += 1;
+    let value = inlineValue;
+    if (value === undefined) {
+      const next = argv[i + 1];
+      if (!next || next.startsWith('--')) {
+        throw new Error(`Missing value for --${rawKey}`);
+      }
+      value = next;
+      i += 1;
+    }
+
+    options[optionKey] = value;
   }
 
   return { positional, options };
@@ -83,7 +104,11 @@ async function main() {
   process.exit(1);
 }
 
-main().catch((error) => {
-  console.error(`apimap failed: ${error.message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(`apimap failed: ${error.message}`);
+    process.exit(1);
+  });
+}
+
+module.exports = { parseArgs, main, OPTION_ALIASES };

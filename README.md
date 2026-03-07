@@ -27,7 +27,11 @@ Server runs at `http://localhost:3789` by default.
 
 ```bash
 npx apimap scan . --ai-provider openai --ai-token "$OPENAI_API_KEY" --ai-model gpt-4o-mini
+# also valid:
+npx apimap scan . --ai-provider=openai --ai-token="$OPENAI_API_KEY" --ai-model=gpt-4o-mini
 ```
+
+Both `--key value` and `--key=value` formats are supported.
 
 ### Option B: environment variables
 
@@ -41,6 +45,8 @@ npx apimap scan .
 
 
 Additional compatibility environment variables are also supported: `AI_PROVIDER`, `AI_API_KEY`/`AI_TOKEN`, `AI_MODEL`, and `AI_BASE_URL`.
+
+Common flag aliases are also supported: `--provider`, `--api-provider`, `--token`, `--api-key`, `--model`, `--base-url`.
 
 Optional endpoint override (OpenAI-compatible gateways):
 
