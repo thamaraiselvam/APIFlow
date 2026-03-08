@@ -1,7 +1,7 @@
 const path = require('path');
 const { walkRepository } = require('./scanner');
 const { extractMetadata } = require('./metadataExtractor');
-const { summarizeApi, resolveAiConfig } = require('./aiClient');
+const { summarizeApi } = require('./aiClient');
 const { validateApiSummary } = require('./aiValidator');
 const { buildGraph } = require('./graphBuilder');
 const { writeCache } = require('./cache');
@@ -49,14 +49,14 @@ function generateOpenCodeScanPrompt(repoPath) {
   };
 }
 
-async function scanRepository(repoPath, options = {}) {
+async function scanRepository(repoPath) {
   const root = path.resolve(repoPath);
   const files = walkRepository(root);
   const metadata = extractMetadata(files);
 
   const apiKnowledge = [];
   for (const routeData of metadata) {
-    const summary = await summarizeApi(routeData, options);
+    const summary = await summarizeApi(routeData);
     validateApiSummary(summary);
     apiKnowledge.push(summary);
   }
@@ -69,7 +69,6 @@ async function scanRepository(repoPath, options = {}) {
     routeCount: metadata.length,
     nodeCount: graph.nodes.length,
     edgeCount: graph.edges.length,
-    aiProvider: resolveAiConfig(options).provider,
   };
 }
 

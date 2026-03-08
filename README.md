@@ -14,36 +14,21 @@ Current scanning scope is intentionally limited to popular Node frameworks:
 - `npx apimap scan .`
 - `npx apimap scan-prompt .`
 - `npx apimap serve`
-
-If you run via npm scripts and need to pass scan flags, forward them after `--`:
-
-```bash
-npm run scan -- --provider openai --ai-token "$OPENAI_API_KEY" --model gpt-4o-mini
-```
+- `npm run server -- --dir /path/to/project`
 
 Server runs at `http://localhost:3789` by default.
 
-## AI scan configuration
+When using npm scripts, you can choose which directory to serve:
 
-`scan` supports three providers:
+- `npm run server` (serves from current working directory)
+- `npm run server -- /path/to/project`
+- `npm run server -- --dir /path/to/project`
 
-1. `mock` (default): no network calls, deterministic local summaries
-2. `openai`: calls OpenAI-compatible Chat Completions API and validates JSON output before caching
-3. `opencode`: invokes the locally installed `opencode` CLI and uses its configured credentials/session
+## Scan behavior
 
-### Option A: pass flags directly
+`scan` is now fully local and deterministic. It does not call external AI providers or require API keys.
 
-```bash
-npx apimap scan . --ai-provider openai --ai-token "$OPENAI_API_KEY" --ai-model gpt-4o-mini
-npx apimap scan . --ai-provider opencode
-# also valid:
-npx apimap scan . --ai-provider=openai --ai-token="$OPENAI_API_KEY" --ai-model=gpt-4o-mini
-npx apimap scan . --ai-provider=opencode
-```
-
-Both `--key value` and `--key=value` formats are supported.
-
-### Option C: generate a prompt for manual OpenCode execution
+### Generate a prompt for manual OpenCode execution
 
 If you prefer running OpenCode yourself, generate a ready-to-run prompt:
 
@@ -57,28 +42,6 @@ Copy the prompt block (`---BEGIN_APIMAP_OPENCODE_PROMPT---` to `---END_APIMAP_OP
 - `.apimap/api_knowledge.json`
 - `.apimap/graph.json`
 - `.apimap/scan_state.json`
-
-### Option B: environment variables
-
-```bash
-export APIMAP_AI_PROVIDER=openai
-export APIMAP_AI_TOKEN=your_token
-# or OPENAI_API_KEY / AI_API_KEY
-export APIMAP_AI_MODEL=gpt-4o-mini
-npx apimap scan .
-```
-
-
-Additional compatibility environment variables are also supported: `AI_PROVIDER`, `AI_API_KEY`/`AI_TOKEN`, `AI_MODEL`, and `AI_BASE_URL`.
-
-Common flag aliases are also supported: `--provider`, `--api-provider`, `--token`, `--api-key`, `--model`, `--base-url`.
-
-Optional endpoint override (OpenAI-compatible gateways):
-
-```bash
-export OPENAI_BASE_URL=https://api.openai.com/v1/chat/completions
-# or --ai-base-url <url>
-```
 
 ## Cache output
 

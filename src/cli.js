@@ -6,31 +6,12 @@ const { scanRepository, generateOpenCodeScanPrompt } = require('./engine/workflo
 const { createServer } = require('./server');
 
 const OPTION_ALIASES = {
-  'ai-provider': 'aiProvider',
-  provider: 'aiProvider',
-  'api-provider': 'aiProvider',
-  'ai-token': 'aiToken',
-  token: 'aiToken',
-  'api-key': 'aiToken',
-  'ai-model': 'aiModel',
-  model: 'aiModel',
-  'ai-base-url': 'aiBaseUrl',
-  'base-url': 'aiBaseUrl',
+  dir: 'dir',
+  d: 'dir',
 };
 
 function printUsage() {
-  console.log(`Usage: apimap <init|scan|scan-prompt|serve> [path] [options]
-
-Options (scan):
-  --ai-provider <mock|openai|opencode>   AI provider (default: mock)
-  --ai-token <token>            API token (for openai)
-  --ai-model <model>            Model name (default: gpt-4o-mini)
-  --ai-base-url <url>           Override chat completions endpoint
-
-Also accepts aliases: --provider, --api-provider, --token, --api-key, --model, --base-url.
-
-Environment fallbacks:
-  APIMAP_AI_PROVIDER, APIMAP_AI_TOKEN, APIMAP_AI_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL, AI_PROVIDER, AI_API_KEY, AI_MODEL, AI_BASE_URL
+  console.log(`Usage: apimap <init|scan|scan-prompt|serve> [path]
 
 Path behavior:
   If path is omitted (or points inside a git repo), apimap scans the repository root containing that location.
@@ -53,6 +34,14 @@ function findRepositoryRoot(targetPath) {
 
     current = parent;
   }
+}
+
+function resolveTargetPath(command, argPath, options) {
+  if (command === 'serve') {
+    return path.resolve(options.dir || argPath || '.');
+  }
+
+  return findRepositoryRoot(argPath || '.');
 }
 
 function parseArgs(argv) {
@@ -104,11 +93,11 @@ async function main() {
       `Too many positional arguments: ${positional.slice(1).join(' ')}. `
       + 'Expected at most one optional path argument. '
       + 'If you are running through npm scripts, pass CLI flags after `--` '
-      + '(example: npm run scan -- --provider openai).',
+      + '(example: npm run scan -- .).',
     );
   }
   const argPath = positional[0];
-  const targetPath = findRepositoryRoot(argPath || '.');
+  const targetPath = resolveTargetPath(command, argPath, options);
 
   if (command === 'init') {
     ensureCacheDir(targetPath);
@@ -153,4 +142,10 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseArgs, main, OPTION_ALIASES, findRepositoryRoot };
+module.exports = {
+  parseArgs,
+  main,
+  OPTION_ALIASES,
+  findRepositoryRoot,
+  resolveTargetPath,
+};

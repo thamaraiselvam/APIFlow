@@ -4,41 +4,15 @@ const path = require('path');
 const { parseArgs, main, findRepositoryRoot } = require('../src/cli');
 
 test('parseArgs supports --key=value format', () => {
-  const { positional, options } = parseArgs([
-    '.',
-    '--ai-provider=openai',
-    '--ai-token=abc123',
-    '--ai-model=gpt-4o-mini',
-  ]);
+  const { positional, options } = parseArgs(['.']);
 
   assert.deepEqual(positional, ['.']);
-  assert.equal(options.aiProvider, 'openai');
-  assert.equal(options.aiToken, 'abc123');
-  assert.equal(options.aiModel, 'gpt-4o-mini');
+  assert.deepEqual(options, {});
 });
 
-test('parseArgs supports short aliases used in CLI', () => {
-  const { options } = parseArgs([
-    '--provider', 'openai',
-    '--api-key', 'abc123',
-    '--model', 'gpt-4o-mini',
-    '--base-url', 'https://api.openai.com/v1/chat/completions',
-  ]);
-
-  assert.equal(options.aiProvider, 'openai');
-  assert.equal(options.aiToken, 'abc123');
-  assert.equal(options.aiModel, 'gpt-4o-mini');
-  assert.equal(options.aiBaseUrl, 'https://api.openai.com/v1/chat/completions');
-});
-
-test('parseArgs supports single-dash long aliases', () => {
-  const { options } = parseArgs([
-    '-provider', 'opencode',
-    '-model', 'gpt-4o-mini',
-  ]);
-
-  assert.equal(options.aiProvider, 'opencode');
-  assert.equal(options.aiModel, 'gpt-4o-mini');
+test('parseArgs rejects legacy AI provider flags', () => {
+  assert.throws(() => parseArgs(['--provider', 'openai']), /Unknown option/);
+  assert.throws(() => parseArgs(['--ai-provider', 'openai']), /Unknown option/);
 });
 
 test('parseArgs fails fast for unknown options', () => {
@@ -52,7 +26,7 @@ test('main rejects extra positional args with npm forwarding hint', async () => 
 
     await assert.rejects(
       () => main(),
-      /Too many positional arguments: openai[\s\S]*npm run scan -- --provider openai/,
+      /Too many positional arguments: openai[\s\S]*npm run scan -- \./,
     );
   } finally {
     process.argv = previousArgv;
