@@ -27,6 +27,8 @@ Routeweave scans your Node.js/TypeScript backend with an AI coding agent and bui
 
 ---
 
+## Demo
+
 ![Routeweave demo](docs/demo.gif)
 
 ---
