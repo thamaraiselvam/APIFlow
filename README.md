@@ -27,7 +27,7 @@ Routeweave scans your Node.js/TypeScript backend with an AI coding agent and bui
 
 ---
 
-<video src="docs/RouteWeave Demo.mov" controls width="100%"></video>
+![Routeweave demo](docs/demo.gif)
 
 ---
 
@@ -148,6 +148,8 @@ npm run serve -- ../your-repo   # dev server with real data
 
 Server runs at `http://localhost:3789`.
 
+## TODO
+- Feel free to contribute todo mentioned in `docs/TODO.md`
 ---
 
 <div align="center">
