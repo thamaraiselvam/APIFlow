@@ -1,6 +1,6 @@
 <div align="center">
 
-# APILens
+# Routeweave
 
 **AI-powered API knowledge graph for Node.js backends**
 
@@ -8,15 +8,15 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org)
-[![npm](https://img.shields.io/badge/npx-apilens-red.svg)](https://npmjs.com/package/apilens)
+[![npm](https://img.shields.io/badge/npx-routeweave-red.svg)](https://npmjs.com/package/routeweave)
 
 </div>
 
 ---
 
-## What is APILens?
+## What is Routeweave?
 
-APILens scans your Node.js/TypeScript backend with an AI coding agent and builds a rich, interactive knowledge graph. No manual documentation. No API keys required for serving.
+Routeweave scans your Node.js/TypeScript backend with an AI coding agent and builds a rich, interactive knowledge graph. No manual documentation. No API keys required for serving.
 
 | Feature | Description |
 |---|---|
@@ -66,17 +66,17 @@ APILens scans your Node.js/TypeScript backend with an AI coding agent and builds
 ### 1. Generate scan instructions
 
 ```bash
-npx apilens scan-prompt /path/to/your/repo
+npx routeweave scan-prompt /path/to/your/repo
 ```
 
-This creates `.apilens/SCAN_INSTRUCTIONS.md` inside your target repo and prints:
+This creates `.routeweave/SCAN_INSTRUCTIONS.md` inside your target repo and prints:
 
 ```
 ╔══════════════════════════════════════════════════════════╗
-║           APILens Scan Instructions Ready                ║
+║           Routeweave Scan Instructions Ready                ║
 ╠══════════════════════════════════════════════════════════╣
 ║  📄 Instruction file created at:                         ║
-║     /your/repo/.apilens/SCAN_INSTRUCTIONS.md              ║
+║     /your/repo/.routeweave/SCAN_INSTRUCTIONS.md              ║
 ╠══════════════════════════════════════════════════════════╣
 ║  Next step — open this file in your AI coding agent      ║
 ║  (Claude Code, Cursor, Copilot, etc.) and run:           ║
@@ -84,29 +84,29 @@ This creates `.apilens/SCAN_INSTRUCTIONS.md` inside your target repo and prints:
 ║    "Follow the instructions in SCAN_INSTRUCTIONS.md"    ║
 ║                                                          ║
 ║  The AI will scan your repo and create:                  ║
-║    • .apilens/api_knowledge.json  (required)              ║
-║    • .apilens/metadata.json       (audit trail)           ║
+║    • .routeweave/api_knowledge.json  (required)              ║
+║    • .routeweave/metadata.json       (audit trail)           ║
 ║                                                          ║
-║  Then run:  npx apilens serve .                           ║
+║  Then run:  npx routeweave serve .                           ║
 ╚══════════════════════════════════════════════════════════╝
 ```
 
 ### 2. Run the AI scan
 
-Open `.apilens/SCAN_INSTRUCTIONS.md` in your AI coding agent (Claude Code, Cursor, GitHub Copilot, etc.) and say:
+Open `.routeweave/SCAN_INSTRUCTIONS.md` in your AI coding agent (Claude Code, Cursor, GitHub Copilot, etc.) and say:
 
 > **"Follow the instructions in SCAN_INSTRUCTIONS.md"**
 
 The agent will scan every route, trace through controllers → services → repositories, and write:
-- `.apilens/api_knowledge.json` — full API knowledge (required by dashboard)
-- `.apilens/metadata.json` — raw route metadata and audit trail
+- `.routeweave/api_knowledge.json` — full API knowledge (required by dashboard)
+- `.routeweave/metadata.json` — raw route metadata and audit trail
 
 `graph.json` and `scan_state.json` are derived automatically by the server on first boot — no extra steps needed.
 
 ### 3. Launch the dashboard
 
 ```bash
-npx apilens serve /path/to/your/repo
+npx routeweave serve /path/to/your/repo
 ```
 
 Open **http://localhost:3789** — the full dashboard is ready.
@@ -117,10 +117,10 @@ Open **http://localhost:3789** — the full dashboard is ready.
 
 | Command | Description |
 |---|---|
-| `npx apilens init [path]` | Create the `.apilens/` cache directory |
-| `npx apilens scan-prompt [path]` | Generate AI scan instructions → writes `.apilens/SCAN_INSTRUCTIONS.md` |
-| `npx apilens scan [path]` | Run a local (non-AI) metadata-only scan |
-| `npx apilens serve [path]` | Launch the dashboard server on port 3789 |
+| `npx routeweave init [path]` | Create the `.routeweave/` cache directory |
+| `npx routeweave scan-prompt [path]` | Generate AI scan instructions → writes `.routeweave/SCAN_INSTRUCTIONS.md` |
+| `npx routeweave scan [path]` | Run a local (non-AI) metadata-only scan |
+| `npx routeweave serve [path]` | Launch the dashboard server on port 3789 |
 
 **Path behaviour:**
 - For `init`, `scan`, `scan-prompt`: defaults to the nearest git repository root if no path is given.
@@ -147,7 +147,7 @@ npm run serve       -- /path/to/project
 
 ## Cache Files
 
-The AI scan writes to `.apilens/` inside your project:
+The AI scan writes to `.routeweave/` inside your project:
 
 | File | Required | Description |
 |---|---|---|

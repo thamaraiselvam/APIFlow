@@ -34,7 +34,7 @@ function createServer(rootDir) {
         const { graph } = readCache(rootDir);
         return sendJson(res, 200, graph);
       } catch {
-        return sendJson(res, 500, { error: 'Failed to load graph cache. Run `apilens scan .` first.' });
+        return sendJson(res, 500, { error: 'Failed to load graph cache. Run `routeweave scan .` first.' });
       }
     }
 
@@ -44,7 +44,7 @@ function createServer(rootDir) {
         const apis = apiKnowledge.flatMap((summary) => summary.apis);
         return sendJson(res, 200, { apis });
       } catch {
-        return sendJson(res, 500, { error: 'Failed to load api knowledge cache. Run `apilens scan .` first.' });
+        return sendJson(res, 500, { error: 'Failed to load api knowledge cache. Run `routeweave scan .` first.' });
       }
     }
 
@@ -56,7 +56,7 @@ function createServer(rootDir) {
         const impact = buildImpactPayload(apiKnowledge, { table, column });
         return sendJson(res, 200, impact);
       } catch {
-        return sendJson(res, 500, { error: 'Failed to load impact data. Run `apilens scan .` first.' });
+        return sendJson(res, 500, { error: 'Failed to load impact data. Run `routeweave scan .` first.' });
       }
     }
 

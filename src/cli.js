@@ -11,12 +11,12 @@ const OPTION_ALIASES = {
 };
 
 function printUsage() {
-  console.log(`Usage: apilens <init|scan|scan-prompt|serve> [path]
+  console.log(`Usage: routeweave <init|scan|scan-prompt|serve> [path]
 
 Path behavior:
   - Provide [path] (or --dir <path>) to target that exact directory.
-  - If omitted for init/scan/scan-prompt, apilens uses the nearest git repository root.
-  - If omitted for serve, apilens serves the current working directory.
+  - If omitted for init/scan/scan-prompt, routeweave uses the nearest git repository root.
+  - If omitted for serve, routeweave serves the current working directory.
 `);
 }
 
@@ -120,7 +120,7 @@ async function main() {
 
   if (command === 'init') {
     ensureCacheDir(targetPath);
-    console.log(`Initialized .apilens cache at ${targetPath}`);
+    console.log(`Initialized .routeweave cache at ${targetPath}`);
     return;
   }
 
@@ -134,15 +134,15 @@ async function main() {
   if (command === 'scan-prompt') {
     const result = generateOpenCodeScanPrompt(targetPath);
 
-    // Write the instruction file into the target repo's .apilens directory
-    const apilensDir = path.join(targetPath, '.apilens');
-    fs.mkdirSync(apilensDir, { recursive: true });
-    const instructionFile = path.join(apilensDir, 'SCAN_INSTRUCTIONS.md');
+    // Write the instruction file into the target repo's .routeweave directory
+    const routeweaveDir = path.join(targetPath, '.routeweave');
+    fs.mkdirSync(routeweaveDir, { recursive: true });
+    const instructionFile = path.join(routeweaveDir, 'SCAN_INSTRUCTIONS.md');
     fs.writeFileSync(instructionFile, result.prompt, 'utf8');
 
     console.log('');
     console.log('╔══════════════════════════════════════════════════════════╗');
-    console.log('║            APILens Scan Instructions Ready               ║');
+    console.log('║          Routeweave Scan Instructions Ready              ║');
     console.log('╠══════════════════════════════════════════════════════════╣');
     console.log(`║  📄 Instruction file created at:                         ║`);
     console.log(`║     ${instructionFile.padEnd(54)}║`);
@@ -153,10 +153,10 @@ async function main() {
     console.log('║    "Follow the instructions in SCAN_INSTRUCTIONS.md"    ║');
     console.log('║                                                          ║');
     console.log('║  The AI will scan your repo and create:                  ║');
-    console.log('║    • .apilens/api_knowledge.json  (required)             ║');
-    console.log('║    • .apilens/metadata.json       (audit trail)          ║');
+    console.log('║    • .routeweave/api_knowledge.json  (required)             ║');
+    console.log('║    • .routeweave/metadata.json       (audit trail)          ║');
     console.log('║                                                          ║');
-    console.log('║  Then run:  npx apilens serve .                          ║');
+    console.log('║  Then run:  npx routeweave serve .                          ║');
     console.log('╚══════════════════════════════════════════════════════════╝');
     console.log('');
     console.log(JSON.stringify({ fileCount: result.fileCount, routeCount: result.routeCount, instructionFile }, null, 2));
@@ -167,7 +167,7 @@ async function main() {
     const app = createServer(targetPath);
     const port = process.env.PORT || 3789;
     app.listen(port, () => {
-      console.log(`APILens server listening at http://localhost:${port}`);
+      console.log(`Routeweave server listening at http://localhost:${port}`);
     });
     return;
   }
@@ -178,7 +178,7 @@ async function main() {
 
 if (require.main === module) {
   main().catch((error) => {
-    console.error(`apilens failed: ${error.message}`);
+    console.error(`routeweave failed: ${error.message}`);
     process.exit(1);
   });
 }
