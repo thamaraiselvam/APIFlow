@@ -13,7 +13,15 @@ AI must return JSON following this schema.
    "tables":["string"],
    "services":["string"],
    "caches":["string"],
-   "queues":["string"]
+   "queues":["string"],
+   "tableAccess":[
+    {
+     "table":"string",
+     "columns":["string"],
+     "operations":["SELECT|INSERT|UPDATE|DELETE|UPSERT|UNKNOWN"],
+     "evidence":["string"]
+    }
+   ]
   }
  ]
 }

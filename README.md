@@ -51,3 +51,16 @@ Scan writes the following files in `.apimap/`:
 - `api_knowledge.json`
 - `metadata.json`
 - `scan_state.json`
+
+## Impact analysis
+
+APIFlow now includes table/column impact analysis on top of existing route flows.
+
+- Open the UI and use the **Impact Analysis** card.
+- Select a table, optionally enter a column, and run analysis.
+- APIFlow returns impacted APIs and explains how each API is affected (read/write/wildcard inferred).
+
+Server endpoint:
+
+- `GET /api/impact` (table catalog)
+- `GET /api/impact?table=<table>&column=<column>` (filtered impact results)

@@ -1,20 +1,41 @@
+function formatTableImpact(tableEntry) {
+  const operations = Array.isArray(tableEntry.operations) && tableEntry.operations.length
+    ? tableEntry.operations.join('/')
+    : 'UNKNOWN';
+  const columns = Array.isArray(tableEntry.columns) && tableEntry.columns.length
+    ? ` columns: ${tableEntry.columns.join(', ')}`
+    : '';
+  return `${operations} ${tableEntry.table}${columns}`;
+}
+
 function buildFallbackSummary(routeData) {
   const flow = [];
-  for (const table of routeData.tables) {
-    flow.push(`Reads ${table} table`);
+  const services = Array.isArray(routeData.services) ? routeData.services : [];
+  const caches = Array.isArray(routeData.caches) ? routeData.caches : [];
+  const queues = Array.isArray(routeData.queues) ? routeData.queues : [];
+  const tableAccess = Array.isArray(routeData.tableAccess) && routeData.tableAccess.length
+    ? routeData.tableAccess
+    : (routeData.tables || []).map((table) => ({ table, columns: ['*'], operations: ['UNKNOWN'] }));
+
+  for (const tableEntry of tableAccess) {
+    flow.push(formatTableImpact(tableEntry));
   }
-  for (const service of routeData.services) {
+  for (const service of services) {
     flow.push(`Calls ${service}`);
   }
-  for (const cache of routeData.caches) {
+  for (const cache of caches) {
     flow.push(`Uses cache ${cache}`);
   }
-  for (const queue of routeData.queues) {
+  for (const queue of queues) {
     flow.push(`Publishes/Consumes queue ${queue}`);
   }
   if (!flow.length) {
     flow.push('Processes request and returns response');
   }
+
+  const tables = Array.isArray(routeData.tables) && routeData.tables.length
+    ? routeData.tables
+    : tableAccess.map((entry) => entry.table);
 
   return {
     apis: [
@@ -23,10 +44,11 @@ function buildFallbackSummary(routeData) {
         path: routeData.path,
         summary: `${routeData.method} ${routeData.path} endpoint`,
         flow,
-        tables: routeData.tables,
-        services: routeData.services,
-        caches: routeData.caches,
-        queues: routeData.queues,
+        tables,
+        services,
+        caches,
+        queues,
+        tableAccess,
       },
     ],
   };

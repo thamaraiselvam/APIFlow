@@ -19,12 +19,367 @@ const TABLE_PATTERNS = [
   /update\s+([a-zA-Z0-9_]+)/gi,
 ];
 
+const SQL_LITERAL_PATTERNS = [
+  /`([\s\S]*?\b(?:select|insert|update|delete)\b[\s\S]*?)`/gi,
+  /'([^'\n]*\b(?:select|insert|update|delete)\b[^'\n]*)'/gi,
+  /"([^"\n]*\b(?:select|insert|update|delete)\b[^"\n]*)"/gi,
+];
+
+const FROM_OR_JOIN_PATTERN = /\b(?:from|join)\s+([a-zA-Z0-9_.`"[\]]+)(?:\s+(?:as\s+)?([a-zA-Z_][a-zA-Z0-9_]*))?/gi;
+const INSERT_PATTERN = /\binsert\s+into\s+([a-zA-Z0-9_.`"[\]]+)(?:\s+(?:as\s+)?([a-zA-Z_][a-zA-Z0-9_]*))?/gi;
+const UPDATE_PATTERN = /\bupdate\s+([a-zA-Z0-9_.`"[\]]+)(?:\s+(?:as\s+)?([a-zA-Z_][a-zA-Z0-9_]*))?/gi;
+const DELETE_PATTERN = /\bdelete\s+from\s+([a-zA-Z0-9_.`"[\]]+)(?:\s+(?:as\s+)?([a-zA-Z_][a-zA-Z0-9_]*))?/gi;
+const SELECT_CLAUSE_PATTERN = /\bselect\s+([\s\S]+?)\s+\bfrom\b/i;
+const INSERT_COLUMNS_PATTERN = /\binsert\s+into\s+([a-zA-Z0-9_.`"[\]]+)\s*\(([^)]+)\)/i;
+const UPDATE_SET_PATTERN = /\bupdate\s+([a-zA-Z0-9_.`"[\]]+)(?:\s+(?:as\s+)?([a-zA-Z_][a-zA-Z0-9_]*))?\s+set\s+([\s\S]+?)(?:\bwhere\b|$)/i;
+const QUALIFIED_COLUMN_PATTERN = /\b([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\b/g;
+
+const RESERVED_ALIAS_WORDS = new Set([
+  'on',
+  'where',
+  'set',
+  'values',
+  'left',
+  'right',
+  'inner',
+  'outer',
+  'group',
+  'order',
+  'limit',
+  'offset',
+]);
+
+const RESERVED_COLUMN_WORDS = new Set([
+  'select',
+  'from',
+  'where',
+  'and',
+  'or',
+  'case',
+  'when',
+  'then',
+  'else',
+  'end',
+  'distinct',
+  'count',
+  'sum',
+  'min',
+  'max',
+  'avg',
+  'as',
+  'on',
+  'join',
+  'left',
+  'right',
+  'inner',
+  'outer',
+  'null',
+  'true',
+  'false',
+]);
+
 const SERVICE_PATTERN = /(axios|fetch|http\.get|http\.post|got\.|undici\.|request\()/g;
 const CACHE_PATTERN = /(redis|memcached|cache\.)/gi;
 const QUEUE_PATTERN = /(kafka|rabbitmq|sqs|bullmq|queue\.publish)/gi;
 
 function normalizeMethod(frameworkMethod) {
   return frameworkMethod.toUpperCase();
+}
+
+function normalizeSqlWhitespace(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function cleanIdentifier(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^[`"'\[]+/, '')
+    .replace(/[`"'\]]+$/, '')
+    .replace(/[;,]+$/, '');
+}
+
+function splitSqlList(value) {
+  const list = [];
+  let current = '';
+  let depth = 0;
+
+  for (const char of String(value || '')) {
+    if (char === '(') depth += 1;
+    if (char === ')' && depth > 0) depth -= 1;
+
+    if (char === ',' && depth === 0) {
+      list.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (current.trim()) {
+    list.push(current.trim());
+  }
+
+  return list;
+}
+
+function extractTablesFromPatterns(content) {
+  const tables = new Set();
+  for (const regex of TABLE_PATTERNS) {
+    const cloned = new RegExp(regex.source, regex.flags);
+    let match;
+    while ((match = cloned.exec(content)) !== null) {
+      const table = cleanIdentifier(match[1]);
+      if (table) tables.add(table);
+    }
+  }
+  return [...tables];
+}
+
+function ensureTableUsage(usageMap, table) {
+  const key = table.toLowerCase();
+  if (!usageMap.has(key)) {
+    usageMap.set(key, {
+      table,
+      columns: new Set(),
+      operations: new Set(),
+      evidence: new Set(),
+    });
+  }
+  return usageMap.get(key);
+}
+
+function addColumn(entry, column) {
+  const normalized = cleanIdentifier(column);
+  if (!normalized) return;
+  entry.columns.add(normalized);
+}
+
+function extractSqlFragments(content) {
+  const fragments = [];
+
+  for (const pattern of SQL_LITERAL_PATTERNS) {
+    const cloned = new RegExp(pattern.source, pattern.flags);
+    let match;
+    while ((match = cloned.exec(content)) !== null) {
+      const fragment = normalizeSqlWhitespace(match[1]);
+      if (fragment) {
+        fragments.push(fragment);
+      }
+    }
+  }
+
+  return [...new Set(fragments)];
+}
+
+function detectOperation(statement) {
+  const match = statement.match(/\b(select|insert|update|delete)\b/i);
+  return match ? match[1].toUpperCase() : null;
+}
+
+function registerTables(pattern, statement, usageMap, aliasMap, operation, evidence) {
+  const cloned = new RegExp(pattern.source, pattern.flags);
+  let match;
+
+  while ((match = cloned.exec(statement)) !== null) {
+    const table = cleanIdentifier(match[1]);
+    if (!table) continue;
+
+    const alias = cleanIdentifier(match[2]);
+    const aliasKey = alias.toLowerCase();
+
+    const usage = ensureTableUsage(usageMap, table);
+    usage.operations.add(operation || 'UNKNOWN');
+    if (evidence) usage.evidence.add(evidence);
+
+    aliasMap.set(table.toLowerCase(), table);
+    if (alias && !RESERVED_ALIAS_WORDS.has(aliasKey)) {
+      aliasMap.set(aliasKey, table);
+    }
+  }
+}
+
+function registerTableReferences(statement, usageMap, aliasMap, operation, evidence) {
+  registerTables(FROM_OR_JOIN_PATTERN, statement, usageMap, aliasMap, operation, evidence);
+  registerTables(INSERT_PATTERN, statement, usageMap, aliasMap, operation, evidence);
+  registerTables(UPDATE_PATTERN, statement, usageMap, aliasMap, operation, evidence);
+  registerTables(DELETE_PATTERN, statement, usageMap, aliasMap, operation, evidence);
+}
+
+function allTablesFromAliasMap(aliasMap) {
+  return [...new Set(aliasMap.values())];
+}
+
+function resolveTableByQualifier(aliasMap, qualifier) {
+  const key = cleanIdentifier(qualifier).toLowerCase();
+  return aliasMap.get(key) || null;
+}
+
+function parseColumnToken(rawToken) {
+  const token = normalizeSqlWhitespace(rawToken.replace(/\s+as\s+[a-zA-Z_][a-zA-Z0-9_]*$/i, ''));
+  if (!token) return null;
+
+  if (token === '*') {
+    return { qualifier: null, column: '*' };
+  }
+
+  const wildcardMatch = token.match(/\b([a-zA-Z_][a-zA-Z0-9_]*)\.\*/);
+  if (wildcardMatch) {
+    return { qualifier: cleanIdentifier(wildcardMatch[1]), column: '*' };
+  }
+
+  const qualifiedMatch = token.match(/\b([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\b/);
+  if (qualifiedMatch) {
+    return {
+      qualifier: cleanIdentifier(qualifiedMatch[1]),
+      column: cleanIdentifier(qualifiedMatch[2]),
+    };
+  }
+
+  if (token.includes('(')) {
+    return null;
+  }
+
+  const first = cleanIdentifier(token.split(/\s+/)[0]);
+  if (!first || RESERVED_COLUMN_WORDS.has(first.toLowerCase())) {
+    return null;
+  }
+
+  return { qualifier: null, column: first };
+}
+
+function addColumnsFromSelectClause(statement, usageMap, aliasMap) {
+  const match = SELECT_CLAUSE_PATTERN.exec(statement);
+  if (!match) return;
+
+  const columns = splitSqlList(match[1]);
+  const knownTables = allTablesFromAliasMap(aliasMap);
+
+  for (const rawColumn of columns) {
+    const parsed = parseColumnToken(rawColumn);
+    if (!parsed) continue;
+
+    if (parsed.column === '*') {
+      if (parsed.qualifier) {
+        const table = resolveTableByQualifier(aliasMap, parsed.qualifier);
+        if (table) addColumn(ensureTableUsage(usageMap, table), '*');
+        continue;
+      }
+
+      for (const table of knownTables) {
+        addColumn(ensureTableUsage(usageMap, table), '*');
+      }
+      continue;
+    }
+
+    if (parsed.qualifier) {
+      const table = resolveTableByQualifier(aliasMap, parsed.qualifier);
+      if (table) addColumn(ensureTableUsage(usageMap, table), parsed.column);
+      continue;
+    }
+
+    if (knownTables.length === 1) {
+      addColumn(ensureTableUsage(usageMap, knownTables[0]), parsed.column);
+    }
+  }
+}
+
+function addColumnsFromInsert(statement, usageMap) {
+  const match = INSERT_COLUMNS_PATTERN.exec(statement);
+  if (!match) return;
+
+  const table = cleanIdentifier(match[1]);
+  if (!table) return;
+
+  const usage = ensureTableUsage(usageMap, table);
+  for (const column of splitSqlList(match[2])) {
+    addColumn(usage, column);
+  }
+}
+
+function addColumnsFromUpdate(statement, usageMap, aliasMap) {
+  const match = UPDATE_SET_PATTERN.exec(statement);
+  if (!match) return;
+
+  const table = cleanIdentifier(match[1]);
+  const alias = cleanIdentifier(match[2]);
+  const setClause = match[3] || '';
+  const usage = ensureTableUsage(usageMap, table);
+
+  if (alias) {
+    aliasMap.set(alias.toLowerCase(), table);
+  }
+
+  for (const assignment of splitSqlList(setClause)) {
+    const assignmentMatch = assignment.match(/^\s*([a-zA-Z_][a-zA-Z0-9_]*)(?:\.([a-zA-Z_][a-zA-Z0-9_]*))?\s*=/);
+    if (!assignmentMatch) continue;
+
+    if (assignmentMatch[2]) {
+      const resolved = resolveTableByQualifier(aliasMap, assignmentMatch[1]);
+      if (resolved) addColumn(ensureTableUsage(usageMap, resolved), assignmentMatch[2]);
+      continue;
+    }
+
+    addColumn(usage, assignmentMatch[1]);
+  }
+}
+
+function addColumnsFromQualifiedReferences(statement, usageMap, aliasMap) {
+  const cloned = new RegExp(QUALIFIED_COLUMN_PATTERN.source, QUALIFIED_COLUMN_PATTERN.flags);
+  let match;
+  while ((match = cloned.exec(statement)) !== null) {
+    const table = resolveTableByQualifier(aliasMap, match[1]);
+    if (!table) continue;
+    addColumn(ensureTableUsage(usageMap, table), match[2]);
+  }
+}
+
+function parseSqlStatement(statement, usageMap) {
+  const normalized = normalizeSqlWhitespace(statement);
+  if (!normalized) return;
+
+  const operation = detectOperation(normalized);
+  if (!operation) return;
+
+  const evidence = normalized.slice(0, 240);
+  const aliasMap = new Map();
+
+  registerTableReferences(normalized, usageMap, aliasMap, operation, evidence);
+  if (!aliasMap.size) return;
+
+  addColumnsFromInsert(normalized, usageMap);
+  addColumnsFromUpdate(normalized, usageMap, aliasMap);
+  addColumnsFromSelectClause(normalized, usageMap, aliasMap);
+  addColumnsFromQualifiedReferences(normalized, usageMap, aliasMap);
+}
+
+function extractTableAccess(content) {
+  const usageMap = new Map();
+
+  for (const fragment of extractSqlFragments(content)) {
+    for (const statement of fragment.split(';')) {
+      parseSqlStatement(statement, usageMap);
+    }
+  }
+
+  for (const table of extractTablesFromPatterns(content)) {
+    const usage = ensureTableUsage(usageMap, table);
+    if (!usage.operations.size) usage.operations.add('UNKNOWN');
+  }
+
+  const tableAccess = [...usageMap.values()].map((usage) => ({
+    table: usage.table,
+    columns: [...usage.columns].sort((a, b) => {
+      if (a === '*') return -1;
+      if (b === '*') return 1;
+      return a.localeCompare(b);
+    }),
+    operations: [...usage.operations],
+    evidence: [...usage.evidence].slice(0, 2),
+  }));
+
+  tableAccess.sort((a, b) => a.table.localeCompare(b.table));
+  return tableAccess;
 }
 
 function inferNextRoutePath(filePath) {
@@ -75,15 +430,7 @@ function extractRoutes(content, filePath) {
 }
 
 function extractTables(content) {
-  const tables = new Set();
-  for (const regex of TABLE_PATTERNS) {
-    const cloned = new RegExp(regex.source, regex.flags);
-    let match;
-    while ((match = cloned.exec(content)) !== null) {
-      tables.add(match[1]);
-    }
-  }
-  return [...tables];
+  return extractTableAccess(content).map((entry) => entry.table);
 }
 
 function extractByPattern(content, pattern, transform = (x) => x) {
@@ -106,7 +453,8 @@ function extractMetadata(filePaths) {
       continue;
     }
 
-    const tables = extractTables(content);
+    const tableAccess = extractTableAccess(content);
+    const tables = tableAccess.map((entry) => entry.table);
     const services = extractByPattern(content, SERVICE_PATTERN);
     const caches = extractByPattern(content, CACHE_PATTERN, (x) => x.toLowerCase());
     const queues = extractByPattern(content, QUEUE_PATTERN, (x) => x.toLowerCase());
@@ -118,6 +466,7 @@ function extractMetadata(filePaths) {
         services,
         caches,
         queues,
+        tableAccess,
         code: content.slice(0, 2500),
       });
     }
@@ -126,4 +475,4 @@ function extractMetadata(filePaths) {
   return routeMetadata;
 }
 
-module.exports = { extractMetadata, inferNextRoutePath };
+module.exports = { extractMetadata, inferNextRoutePath, extractTableAccess };

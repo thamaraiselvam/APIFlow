@@ -10,6 +10,7 @@
 - Store summaries in cache
 - Render graph UI
 - Provide API detail view
+- Provide table/column impact analysis view
 - Allow rescanning when code changes
 
 ## Non Functional Requirements

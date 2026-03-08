@@ -586,6 +586,93 @@
         padding: 10px;
       }
 
+      .impact-controls {
+        margin-top: 10px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .impact-select,
+      .impact-input {
+        width: 100%;
+        border: 1px solid rgba(25, 49, 104, 0.2);
+        border-radius: 10px;
+        padding: 8px 10px;
+        font: inherit;
+        font-size: 12px;
+        color: #18366b;
+        background: #ffffff;
+      }
+
+      .impact-select:focus,
+      .impact-input:focus {
+        outline: none;
+        border-color: rgba(36, 95, 228, 0.55);
+        box-shadow: 0 0 0 3px rgba(36, 95, 228, 0.14);
+      }
+
+      .impact-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .impact-actions button {
+        flex: 1;
+      }
+
+      .impact-hint {
+        margin: 8px 0 0;
+        color: var(--ink-soft);
+        font-size: 12px;
+        line-height: 1.42;
+      }
+
+      .impact-results {
+        margin: 10px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 8px;
+        max-height: 290px;
+        overflow: auto;
+      }
+
+      .impact-item {
+        border: 1px solid rgba(25, 49, 104, 0.15);
+        border-radius: 11px;
+        background: #f8fbff;
+        padding: 8px;
+      }
+
+      .impact-item-top {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .impact-path {
+        font-size: 12px;
+        font-weight: 700;
+        color: #15386f;
+        word-break: break-word;
+      }
+
+      .impact-how {
+        margin: 6px 0 0;
+        color: var(--ink-soft);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .impact-ops,
+      .impact-match,
+      .impact-flow {
+        margin: 5px 0 0;
+        color: #2b4b84;
+        font-size: 11px;
+        line-height: 1.35;
+      }
+
       @keyframes rise {
         from {
           opacity: 0;
@@ -692,7 +779,8 @@
           tables: [],
           services: [],
           caches: ['.apimap/graph.json'],
-          queues: []
+          queues: [],
+          tableAccess: []
         },
         {
           method: 'GET',
@@ -706,7 +794,36 @@
           tables: [],
           services: [],
           caches: ['.apimap/api_knowledge.json'],
-          queues: []
+          queues: [],
+          tableAccess: []
+        },
+        {
+          method: 'GET',
+          path: '/api/accounts/:accountId',
+          summary: 'Demo endpoint: reads profile columns and updates the account audit trail.',
+          flow: [
+            'Read accounts.id, accounts.status, and accounts.tier to build the response payload',
+            'Update account_audit.last_viewed_at for recent activity tracking',
+            'Return enriched account information to the caller'
+          ],
+          tables: ['accounts', 'account_audit'],
+          services: [],
+          caches: [],
+          queues: [],
+          tableAccess: [
+            {
+              table: 'accounts',
+              columns: ['id', 'status', 'tier'],
+              operations: ['SELECT'],
+              evidence: ['select id, status, tier from accounts where id = ?']
+            },
+            {
+              table: 'account_audit',
+              columns: ['last_viewed_at', 'account_id'],
+              operations: ['UPDATE'],
+              evidence: ['update account_audit set last_viewed_at = now() where account_id = ?']
+            }
+          ]
         }
       ];
 
@@ -731,15 +848,180 @@
         return 'url(#mPost)';
       }
 
+      function dedupeStrings(values) {
+        const out = [];
+        const seen = new Set();
+        for (const value of values || []) {
+          const text = String(value || '').trim();
+          if (!text) continue;
+          const key = text.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push(text);
+        }
+        return out;
+      }
+
+      function normalizeTableAccessEntries(raw) {
+        if (!Array.isArray(raw)) return [];
+        const entries = [];
+
+        for (const item of raw) {
+          if (!item || !item.table) continue;
+          entries.push({
+            table: String(item.table),
+            columns: dedupeStrings(Array.isArray(item.columns) ? item.columns : []),
+            operations: dedupeStrings(Array.isArray(item.operations) ? item.operations : []),
+            evidence: dedupeStrings(Array.isArray(item.evidence) ? item.evidence : [])
+          });
+        }
+
+        return entries;
+      }
+
+      function localTableAccess(api) {
+        const tableAccess = normalizeTableAccessEntries(api.tableAccess);
+        if (tableAccess.length) return tableAccess;
+
+        return dedupeStrings(api.tables).map((table) => ({
+          table,
+          columns: ['*'],
+          operations: ['UNKNOWN'],
+          evidence: []
+        }));
+      }
+
+      function impactVerb(operations) {
+        const set = new Set((operations || []).map((value) => String(value || '').toUpperCase()));
+        const reads = set.has('SELECT');
+        const writes = set.has('INSERT') || set.has('UPDATE') || set.has('DELETE') || set.has('UPSERT');
+        if (reads && writes) return 'reads and writes';
+        if (reads) return 'reads';
+        if (writes) return 'writes';
+        return 'touches';
+      }
+
+      function impactHow(verb, table, column, match) {
+        const prefix = `${verb.charAt(0).toUpperCase()}${verb.slice(1)}`;
+        if (!column) return `${prefix} table ${table}`;
+        if (match === 'explicit') return `${prefix} column ${column} in table ${table}`;
+        if (match === 'wildcard') return `${prefix} table ${table} via wildcard access; ${column} may be impacted`;
+        return `${prefix} table ${table}; column impact inferred from table-level metadata`;
+      }
+
+      function buildLocalImpactPayload(apis, filters = {}) {
+        const tableFilter = String(filters.table || '').trim();
+        const columnFilter = String(filters.column || '').trim();
+        const tableFilterKey = tableFilter.toLowerCase();
+        const columnFilterKey = columnFilter.toLowerCase();
+        const tableMap = new Map();
+        const results = [];
+
+        for (const api of apis || []) {
+          const access = localTableAccess(api);
+          for (const entry of access) {
+            const tableKey = entry.table.toLowerCase();
+            if (!tableMap.has(tableKey)) {
+              tableMap.set(tableKey, { table: entry.table, columns: new Set(), apiIds: new Set() });
+            }
+
+            const tableMeta = tableMap.get(tableKey);
+            tableMeta.apiIds.add(`${api.method} ${api.path}`);
+            for (const column of entry.columns) {
+              tableMeta.columns.add(column);
+            }
+          }
+        }
+
+        if (tableFilter) {
+          for (const api of apis || []) {
+            const access = localTableAccess(api).filter((entry) => entry.table.toLowerCase() === tableFilterKey);
+            if (!access.length) continue;
+
+            const operations = new Set();
+            const columns = new Set();
+            const evidence = [];
+            let match = 'table';
+            let matchedEntry = false;
+
+            for (const entry of access) {
+              const columnKeys = new Set((entry.columns || []).map((value) => value.toLowerCase()));
+              if (columnFilterKey) {
+                if (columnKeys.has(columnFilterKey)) {
+                  match = 'explicit';
+                } else if (columnKeys.has('*')) {
+                  if (match !== 'explicit') match = 'wildcard';
+                } else if (!entry.columns || !entry.columns.length) {
+                  if (match === 'table') match = 'inferred-table';
+                } else {
+                  continue;
+                }
+              }
+
+              matchedEntry = true;
+              for (const operation of entry.operations || []) operations.add(operation);
+              for (const column of entry.columns || []) columns.add(column);
+              for (const hint of entry.evidence || []) {
+                if (evidence.length < 2) evidence.push(hint);
+              }
+            }
+
+            if (!matchedEntry) continue;
+
+            const method = String(api.method || '').toUpperCase();
+            const path = String(api.path || '');
+            const verb = impactVerb([...operations]);
+
+            results.push({
+              method,
+              path,
+              summary: api.summary || `${method} ${path} endpoint`,
+              table: tableFilter,
+              operations: [...operations],
+              columns: [...columns],
+              columnMatch: columnFilterKey ? match : 'table',
+              impact: verb,
+              how: impactHow(verb, tableFilter, columnFilter, match),
+              flowMatches: (api.flow || []).filter((step) => {
+                const text = String(step || '').toLowerCase();
+                if (text.includes(tableFilterKey)) return true;
+                return columnFilterKey ? text.includes(columnFilterKey) : false;
+              }),
+              evidence
+            });
+          }
+        }
+
+        return {
+          totalApis: (apis || []).length,
+          tables: [...tableMap.values()].map((entry) => ({
+            table: entry.table,
+            columns: [...entry.columns].sort((a, b) => {
+              if (a === '*') return -1;
+              if (b === '*') return 1;
+              return a.localeCompare(b);
+            }),
+            apiCount: entry.apiIds.size
+          })).sort((a, b) => a.table.localeCompare(b.table)),
+          filters: { table: tableFilter, column: columnFilter },
+          results: results.sort((a, b) => `${a.method} ${a.path}`.localeCompare(`${b.method} ${b.path}`))
+        };
+      }
+
+      function columnMatchLabel(value) {
+        if (value === 'explicit') return 'Explicit column mapping';
+        if (value === 'wildcard') return 'Wildcard query mapping';
+        if (value === 'inferred-table') return 'Inferred from table-level metadata';
+        return 'Table-level mapping';
+      }
+
       function normalizeApis(raw) {
-        const legacyPaths = new Set(['/users/:id', '/users/{id}']);
         const list = Array.isArray(raw) ? raw : [];
         const deduped = [];
         const seen = new Set();
 
         for (const item of list) {
           if (!item || !item.method || !item.path) continue;
-          if (legacyPaths.has(item.path)) continue;
           const method = String(item.method).toUpperCase();
           const key = `${method} ${item.path}`;
           if (seen.has(key)) continue;
@@ -750,10 +1032,11 @@
             path: item.path,
             summary: item.summary || 'No summary available.',
             flow: Array.isArray(item.flow) ? item.flow : [],
-            tables: Array.isArray(item.tables) ? item.tables : [],
-            services: Array.isArray(item.services) ? item.services : [],
-            caches: Array.isArray(item.caches) ? item.caches : [],
-            queues: Array.isArray(item.queues) ? item.queues : []
+            tables: dedupeStrings(Array.isArray(item.tables) ? item.tables : []),
+            services: dedupeStrings(Array.isArray(item.services) ? item.services : []),
+            caches: dedupeStrings(Array.isArray(item.caches) ? item.caches : []),
+            queues: dedupeStrings(Array.isArray(item.queues) ? item.queues : []),
+            tableAccess: normalizeTableAccessEntries(item.tableAccess)
           });
         }
 
@@ -852,6 +1135,12 @@
         const [error, setError] = useState('');
         const [search, setSearch] = useState('');
         const [view, setView] = useState('overview');
+        const [impactTable, setImpactTable] = useState('');
+        const [impactColumn, setImpactColumn] = useState('');
+        const [impactTables, setImpactTables] = useState([]);
+        const [impactResults, setImpactResults] = useState([]);
+        const [impactLoading, setImpactLoading] = useState(false);
+        const [impactError, setImpactError] = useState('');
 
         const apis = useMemo(() => normalizeApis(rawApis), [rawApis]);
         const filteredApis = useMemo(() => {
@@ -860,7 +1149,47 @@
           return apis.filter((api) => `${api.method} ${api.path} ${api.summary}`.toLowerCase().includes(value));
         }, [apis, search]);
 
+        const availableImpactColumns = useMemo(() => {
+          if (!impactTable) return [];
+          const selected = impactTables.find((tableMeta) => tableMeta.table === impactTable);
+          if (!selected || !Array.isArray(selected.columns)) return [];
+          return selected.columns.filter((column) => column !== '*');
+        }, [impactTable, impactTables]);
+
         const apiPositions = useMemo(() => buildApiPositions(apis), [apis]);
+
+        async function runImpactQuery(nextTable, nextColumn) {
+          setImpactLoading(true);
+
+          const tableValue = String(nextTable || '').trim();
+          const columnValue = String(nextColumn || '').trim();
+          const params = new URLSearchParams();
+          if (tableValue) params.set('table', tableValue);
+          if (columnValue) params.set('column', columnValue);
+
+          try {
+            const suffix = params.toString() ? `?${params.toString()}` : '';
+            const response = await fetch(`/api/impact${suffix}`);
+            if (!response.ok) {
+              throw new Error('Impact cache unavailable. Showing locally inferred impact.');
+            }
+
+            const payload = await response.json();
+            const nextTables = Array.isArray(payload.tables) ? payload.tables : [];
+            const nextResults = Array.isArray(payload.results) ? payload.results : [];
+
+            setImpactTables(nextTables);
+            setImpactResults(nextResults);
+            setImpactError('');
+          } catch (err) {
+            const localPayload = buildLocalImpactPayload(apis, { table: tableValue, column: columnValue });
+            setImpactTables(localPayload.tables);
+            setImpactResults(localPayload.results);
+            setImpactError(tableValue ? (err.message || 'Showing locally inferred impact results.') : '');
+          } finally {
+            setImpactLoading(false);
+          }
+        }
 
         useEffect(() => {
           async function loadApis() {
@@ -881,6 +1210,12 @@
 
           loadApis();
         }, []);
+
+        useEffect(() => {
+          setImpactTable('');
+          setImpactColumn('');
+          runImpactQuery('', '');
+        }, [apis]);
 
         useEffect(() => {
           if (!apis.length) {
@@ -914,6 +1249,100 @@
           setSelectedId(id);
           setFocused({ title: `${api.method} ${api.path}`, body: api.summary });
           if (goDetail) setView('detail');
+        }
+
+        function renderImpactAnalysisCard() {
+          return React.createElement('div', { className: 'showcase', key: 'impact' }, [
+            React.createElement('h3', { key: 'title' }, '3. Impact Analysis'),
+            React.createElement('p', { key: 'body' }, 'Select a table and optional column to see which APIs are impacted and how they touch the data.'),
+            React.createElement('div', { className: 'impact-controls', key: 'controls' }, [
+              React.createElement('select', {
+                className: 'impact-select',
+                value: impactTable,
+                onChange: (event) => {
+                  setImpactTable(event.target.value);
+                  setImpactColumn('');
+                },
+                key: 'table'
+              }, [
+                React.createElement('option', { value: '', key: 'placeholder' }, 'Select table'),
+                ...impactTables.map((tableMeta) => React.createElement(
+                  'option',
+                  { value: tableMeta.table, key: tableMeta.table },
+                  `${tableMeta.table} (${tableMeta.apiCount})`
+                ))
+              ]),
+              React.createElement('input', {
+                className: 'impact-input',
+                list: 'impact-columns-list',
+                value: impactColumn,
+                onChange: (event) => setImpactColumn(event.target.value),
+                placeholder: impactTable ? 'Optional column (ex: status)' : 'Select a table first',
+                disabled: !impactTable,
+                key: 'column'
+              }),
+              React.createElement(
+                'datalist',
+                { id: 'impact-columns-list', key: 'column-list' },
+                availableImpactColumns.map((column) => React.createElement('option', { value: column, key: column }))
+              ),
+              React.createElement('div', { className: 'impact-actions', key: 'actions' }, [
+                React.createElement('button', {
+                  type: 'button',
+                  className: 'primary-btn',
+                  disabled: !impactTable || impactLoading,
+                  onClick: () => runImpactQuery(impactTable, impactColumn),
+                  key: 'run'
+                }, impactLoading ? 'Analyzing...' : 'Analyze Impact'),
+                React.createElement('button', {
+                  type: 'button',
+                  className: 'ghost-btn',
+                  disabled: impactLoading,
+                  onClick: () => {
+                    setImpactTable('');
+                    setImpactColumn('');
+                    runImpactQuery('', '');
+                  },
+                  key: 'clear'
+                }, 'Clear')
+              ]),
+              React.createElement(
+                'p',
+                { className: 'impact-hint', key: 'hint' },
+                impactTable
+                  ? `${impactResults.length} impacted API${impactResults.length === 1 ? '' : 's'} for this change scope.`
+                  : 'Pick a table to run impact analysis across all APIs.'
+              )
+            ]),
+            impactTable
+              ? impactResults.length
+                ? React.createElement(
+                    'ul',
+                    { className: 'impact-results', key: 'results' },
+                    impactResults.map((result, index) => React.createElement('li', {
+                      className: 'impact-item',
+                      key: `${result.method}-${result.path}-${index}`
+                    }, [
+                      React.createElement('div', { className: 'impact-item-top', key: 'top' }, [
+                        React.createElement('span', { className: `method ${methodClass(result.method)}`, key: 'method' }, result.method),
+                        React.createElement('span', { className: 'impact-path', key: 'path' }, result.path)
+                      ]),
+                      React.createElement('p', { className: 'impact-how', key: 'how' }, result.how),
+                      React.createElement('p', { className: 'impact-ops', key: 'ops' },
+                        `Operations: ${(result.operations || []).join(', ') || 'UNKNOWN'}`),
+                      React.createElement('p', { className: 'impact-match', key: 'match' },
+                        `Mapping: ${columnMatchLabel(result.columnMatch)}`),
+                      result.flowMatches && result.flowMatches.length
+                        ? React.createElement('p', { className: 'impact-flow', key: 'flow' },
+                            `Flow hint: ${truncate(result.flowMatches[0], 96)}`)
+                        : null
+                    ]))
+                  )
+                : React.createElement('p', { className: 'impact-hint', key: 'empty' },
+                    impactLoading ? 'Analyzing impact...' : 'No APIs match this table/column selection.')
+              : null,
+            impactError ? React.createElement('p', { className: 'impact-flow', key: 'error' }, impactError) : null
+          ]);
         }
 
         function detailsContent() {
@@ -1166,6 +1595,7 @@
                       React.createElement('h3', { key: 't' }, 'No endpoint selected'),
                       React.createElement('p', { key: 'p' }, 'Pick any bubble to continue to the detailed journey layout.')
                     ]),
+                renderImpactAnalysisCard(),
                 error ? React.createElement('div', { className: 'error', key: 'err' }, error) : null
               ])
             ])
@@ -1365,11 +1795,12 @@
           React.createElement('header', { className: 'topbar', key: 'head' }, [
             React.createElement('div', { className: 'brand', key: 'brand' }, [
               React.createElement('h1', { key: 'h' }, 'APIFlow Constellation'),
-              React.createElement('p', { key: 'p' }, 'A richer and more colorful UX: discover endpoints in the constellation, then enter a dedicated screen to inspect full API journeys without visual overlap.'),
+              React.createElement('p', { key: 'p' }, 'Discover endpoint journeys, then run impact analysis to see exactly which APIs are affected when a table or column changes.'),
               React.createElement('div', { className: 'badge-row', key: 'badges' }, [
                 React.createElement('span', { className: 'badge', key: 'b1' }, 'Discover'),
                 React.createElement('span', { className: 'badge', key: 'b2' }, 'Detail Screen'),
-                React.createElement('span', { className: 'badge', key: 'b3' }, 'Flow + Dependencies')
+                React.createElement('span', { className: 'badge', key: 'b3' }, 'Flow + Dependencies'),
+                React.createElement('span', { className: 'badge', key: 'b4' }, 'Impact Analysis')
               ])
             ]),
             React.createElement('div', { className: 'topbar-right', key: 'right' }, [
