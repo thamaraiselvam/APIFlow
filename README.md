@@ -27,37 +27,7 @@ Routeweave scans your Node.js/TypeScript backend with an AI coding agent and bui
 
 ---
 
-## Screenshots
-
-### Explorer — Clustered Bubble Graph
-
-![API Explorer](docs/screenshots/explorer.png)
-
-*APIs grouped by route domain. Click any bubble to see its full details in the right panel.*
-
----
-
-### API Details — Right Panel
-
-![API Details](docs/screenshots/api-detail.png)
-
-*Flow steps, database tables with MongoDB/Prisma badges, dependencies, and a "View Full Flow →" button.*
-
----
-
-### Impact Analysis — Table / Column Scope
-
-![Impact Analysis](docs/screenshots/impact-analysis-users.png)
-
-*Select the `users` table → instantly see all 29 APIs that read or write it, with column-level evidence.*
-
----
-
-### Flow Overlay — Step-by-Step Business Logic
-
-![Flow Overlay](docs/screenshots/flow-overlay.png)
-
-*Full-screen D3 graph tracing each API through its controller → service → database path.*
+![Routeweave demo](docs/demo.gif)
 
 ---
 
